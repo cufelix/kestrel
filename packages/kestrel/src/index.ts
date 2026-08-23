@@ -1,0 +1,122 @@
+/**
+ * Kestrel — an autonomous desktop agent that learns.
+ *
+ * A first-party plugin, not an add-on: it ships inside the fork and loads by
+ * default. Everything here is additive, so upstream opencode can still be
+ * merged.
+ *
+ * Three things the host does not have:
+ *   hands        the desktop, as first-party tools
+ *   memory       what it learned about this machine, recalled and written back
+ *   discipline   the loop behaviour that makes desktop work reliable
+ */
+
+import type { Plugin } from "@opencode-ai/plugin"
+import { tool } from "@opencode-ai/plugin"
+import { desktopTools } from "./desktop"
+import { Notes } from "./brain/notes"
+import { Discipline } from "./brain/discipline"
+import { DESKTOP_PROTOCOL, knowledge } from "./brain/protocol"
+
+export const Kestrel: Plugin = async () => {
+  const notes = new Notes()
+  const discipline = new Discipline()
+
+  // The desktop layer may not be installed. That is a reason to run without
+  // hands and say so, not a reason to fail to start.
+  let hands: Awaited<ReturnType<typeof desktopTools>> = {}
+  let handsError = ""
+  try {
+    hands = await desktopTools()
+  } catch (error) {
+    handsError = error instanceof Error ? error.message : String(error)
+  }
+
+  /** The task being worked on, for deciding which notes are worth recalling. */
+  let task = ""
+
+  const guarded = Object.fromEntries(
+    Object.entries(hands).map(([name, definition]) => [
+      name,
+      tool({
+        description: definition.description,
+        args: definition.args,
+        async execute(args, context) {
+          const verdict = discipline.before(name, args as Record<string, unknown>)
+          if (!verdict.allow) return verdict.reason
+          try {
+            const output = await definition.execute(args, context)
+            const text = typeof output === "string" ? output : output.output
+            return text + discipline.after(name, args as Record<string, unknown>, true)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            const note = discipline.after(name, args as Record<string, unknown>, false)
+            throw new Error(message + note)
+          }
+        },
+      }),
+    ]),
+  )
+
+  return {
+    tool: {
+      ...guarded,
+
+      kestrel_remember: tool({
+        description:
+          "Write down something durable you learned about this machine, so a later task " +
+          "starts knowing it. Use it for facts that will still be true tomorrow — which " +
+          "application a category opens, a control that is not where it looks, a step that " +
+          "is always needed. Not for anything specific to the task in hand.",
+        args: {
+          topic: tool.schema
+            .string()
+            .describe("A short subject, e.g. 'calculator' or 'text editor'"),
+          fact: tool.schema.string().describe("One sentence, stated as fact"),
+        },
+        async execute(args) {
+          const result = await notes.remember(args.topic, args.fact)
+          return result.added
+            ? `Remembered under “${result.topic}”.`
+            : `Already known under “${result.topic}” — nothing added.`
+        },
+      }),
+
+      kestrel_recall: tool({
+        description:
+          "Look up what is already known about this machine. Relevant notes are given to " +
+          "you automatically at the start of a task; use this to search for more.",
+        args: { query: tool.schema.string().optional().describe("What you are looking for") },
+        async execute(args) {
+          const found = args.query ? await notes.recall(args.query, 10) : await notes.list()
+          if (!found.length) return "Nothing has been learned about this machine yet."
+          return found.map((note) => `## ${note.topic}\n${note.body}`).join("\n\n")
+        },
+      }),
+    },
+
+    async "chat.message"(_input, output) {
+      const said = output.parts
+        .filter((part: any) => part.type === "text")
+        .map((part: any) => String(part.text ?? ""))
+        .join(" ")
+      if (said.trim()) task = said.trim().slice(0, 600)
+    },
+
+    async "experimental.chat.system.transform"(_input, output) {
+      output.system.push(DESKTOP_PROTOCOL)
+      if (handsError) {
+        output.system.push(
+          `# The desktop is unavailable\nThe hands could not be started: ${handsError}\n` +
+            `Say so plainly if asked to do something on the screen.`,
+        )
+        return
+      }
+      const recalled = await notes.recall(task)
+      const learned = knowledge(recalled)
+      if (learned) output.system.push(learned)
+    },
+  }
+}
+
+export default Kestrel

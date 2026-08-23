@@ -1,0 +1,11 @@
+{
+  "name": "@kestrel/agent",
+  "version": "1.0.0",
+  "description": "Kestrel's hands and memory — a first-party plugin",
+  "type": "module",
+  "private": true,
+  "main": "src/index.ts",
+  "dependencies": {
+    "@opencode-ai/plugin": "workspace:*"
+  }
+}
