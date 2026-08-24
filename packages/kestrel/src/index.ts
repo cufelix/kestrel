@@ -124,14 +124,28 @@ export const Kestrel: Plugin = async (input) => {
     },
 
     async "experimental.chat.system.transform"(_input, output) {
-      output.system.push(DESKTOP_PROTOCOL)
+      // A way to prove the prompt actually reaches the model. Injection is
+      // invisible from the outside, and "the instruction was ignored" and "the
+      // instruction was never sent" look identical until you can tell them
+      // apart. Ask it to repeat the marker.
+      if (process.env.KESTREL_PROMPT_PROBE) output.system.push(`PROBE-MARKER-${process.env.KESTREL_PROMPT_PROBE}`)
       if (handsError) {
+        // Deliberately *not* the desktop protocol. It describes ui_snapshot,
+        // ui_click and the rest at length, and describing tools that are not
+        // there is how a model ends up calling one and being told it does not
+        // exist — which it then works around by guessing at shell commands.
         output.system.push(
-          `# The desktop is unavailable\nThe hands could not be started: ${handsError}\n` +
-            `Say so plainly if asked to do something on the screen.`,
+          `# There is no desktop\n` +
+            `The tools that drive this machine's screen could not be started: ${handsError}\n` +
+            `You have no way to see or touch the screen. If you are asked to do something ` +
+            `on the desktop, say plainly that the desktop layer is not available and that ` +
+            `it is installed with:\n` +
+            `    pipx install 'lai[tui,mcp] @ git+https://github.com/cufelix/lai.git'\n` +
+            `Do not attempt it with shell commands instead.`,
         )
         return
       }
+      output.system.push(DESKTOP_PROTOCOL)
       const recalled = await notes.recall(task)
       const learned = knowledge(recalled)
       if (learned) output.system.push(learned)
