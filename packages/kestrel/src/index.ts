@@ -73,10 +73,21 @@ export const Kestrel: Plugin = async (input) => {
 
       kestrel_remember: tool({
         description:
-          "Write down something durable you learned about this machine, so a later task " +
-          "starts knowing it. Use it for facts that will still be true tomorrow — which " +
-          "application a category opens, a control that is not where it looks, a step that " +
-          "is always needed. Not for anything specific to the task in hand.",
+          "Write down something durable you learned about THIS MACHINE, so a later task " +
+          "starts knowing it.\n\n" +
+          "Worth remembering — still true next week, saves a later task from " +
+          "rediscovering it:\n" +
+          "  · \"The text editor is Xed; app_open 'Text Editor' opens it\"\n" +
+          "  · \"The calculator's display is not in the accessibility tree — read it " +
+          "with ocr_read\"\n" +
+          "  · \"LibreOffice takes about eight seconds before its window is usable\"\n\n" +
+          "Not worth remembering — the answer to the task you were just given, not a " +
+          "fact about the machine:\n" +
+          "  · \"45 + 78 = 123\"  (arithmetic, not this computer)\n" +
+          "  · \"The calculator works\"  (says nothing a later task can use)\n" +
+          "  · \"I opened Firefox successfully\"  (an event, not a fact)\n\n" +
+          "If you cannot say how a later task would be faster for knowing it, do not " +
+          "write it down.",
         args: {
           topic: tool.schema
             .string()
