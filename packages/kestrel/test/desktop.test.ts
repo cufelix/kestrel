@@ -11,7 +11,7 @@
 
 import { afterAll, describe, expect, test } from "bun:test"
 import path from "node:path"
-import { EXPOSED, desktopTools, hiddenReason, resetDesktop } from "../src/desktop"
+import { EXPOSED, desktopTools, hiddenReason, resetDesktop, toZodShape } from "../src/desktop"
 
 const FAKE = path.join(import.meta.dir, "fake-desktop.ts")
 
@@ -62,5 +62,52 @@ describe("schemas", () => {
   test("what the host does better is filtered out even when offered", async () => {
     const table = await desktopTools()
     expect(table["file_read"]).toBeUndefined()
+  })
+})
+
+describe("nested schemas", () => {
+  const rectangle = {
+    name: "ocr_read",
+    inputSchema: {
+      type: "object",
+      properties: {
+        region: {
+          type: "object",
+          properties: {
+            x: { type: "integer" },
+            y: { type: "integer" },
+            width: { type: "integer" },
+            height: { type: "integer" },
+          },
+          required: ["x", "y", "width", "height"],
+        },
+      },
+    },
+  }
+
+  test("accept the shape the desktop layer asked for", () => {
+    const shape = toZodShape(rectangle as any)
+    const parsed = (shape.region as any).parse({ x: 1, y: 2, width: 3, height: 4 })
+    expect(parsed).toEqual({ x: 1, y: 2, width: 3, height: 4 })
+  })
+
+  test("reject a rendering of that shape as a string", () => {
+    // This is what actually happened: flattened to "some object", the model was
+    // never told the fields, guessed, and sent the text "{x: 185, y: 251, ...}".
+    const shape = toZodShape(rectangle as any)
+    expect(() => (shape.region as any).parse("{x: 185, y: 251, width: 360, height: 200}")).toThrow()
+  })
+
+  test("reject an object missing a required field", () => {
+    const shape = toZodShape(rectangle as any)
+    expect(() => (shape.region as any).parse({ x: 1, y: 2 })).toThrow()
+  })
+
+  test("an object with no declared fields still accepts one", () => {
+    const shape = toZodShape({
+      name: "anything",
+      inputSchema: { type: "object", properties: { extra: { type: "object" } } },
+    } as any)
+    expect((shape.extra as any).parse({ whatever: 1 })).toEqual({ whatever: 1 })
   })
 })

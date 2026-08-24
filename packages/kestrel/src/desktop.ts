@@ -86,7 +86,7 @@ function screenArgs(): string[] {
 }
 
 /** JSON Schema from the desktop layer, as the zod shape a tool wants. */
-function shape(mcp: McpTool): Record<string, any> {
+export function toZodShape(mcp: McpTool): Record<string, any> {
   const schema = (mcp.inputSchema ?? {}) as any
   const properties = (schema.properties ?? {}) as Record<string, any>
   const required = new Set<string>(Array.isArray(schema.required) ? schema.required : [])
@@ -111,8 +111,21 @@ function fromJsonSchema(spec: any): any {
       return z.boolean()
     case "array":
       return z.array(spec.items ? fromJsonSchema(spec.items) : z.any())
-    case "object":
-      return z.object({}).passthrough()
+    case "object": {
+      // Recurse. Flattening a nested object to "some object" is why the model
+      // sent `region` as the *string* "{x: 185, y: 251, ...}" — it was never
+      // told the shape, so it guessed, and guessed a rendering of one.
+      const properties = (spec.properties ?? {}) as Record<string, any>
+      if (!Object.keys(properties).length) return z.object({}).passthrough()
+      const required = new Set<string>(Array.isArray(spec.required) ? spec.required : [])
+      const inner: Record<string, any> = {}
+      for (const [name, child] of Object.entries(properties)) {
+        let field = fromJsonSchema(child)
+        if (child?.description) field = field.describe(String(child.description))
+        inner[name] = required.has(name) ? field : field.optional()
+      }
+      return z.object(inner)
+    }
     default:
       return z.any()
   }
@@ -134,7 +147,7 @@ export async function desktopTools(): Promise<Record<string, ToolDefinition>> {
     if (!wanted.has(mcp.name)) continue
     table[mcp.name] = tool({
       description: mcp.description ?? mcp.name,
-      args: shape(mcp),
+      args: toZodShape(mcp),
       async execute(args) {
         const clean = Object.fromEntries(Object.entries(args ?? {}).filter(([, v]) => v !== undefined))
         const result = await hands.call(mcp.name, clean)
