@@ -19,3 +19,8 @@ jobs:
         working-directory: packages/kestrel
       - name: typecheck
         run: bun turbo typecheck --filter=@kestrel/agent --filter=opencode
+
+# Not at .github/workflows/test.yml because pushing a workflow file needs the
+# `workflow` OAuth scope, which this machine's token does not have. Copy it
+# there once the scope is granted:
+#   mkdir -p .github/workflows && cp ci/github-test.yml .github/workflows/test.yml
