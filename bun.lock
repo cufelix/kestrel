@@ -544,6 +544,10 @@
       "dependencies": {
         "@opencode-ai/plugin": "workspace:*",
       },
+      "devDependencies": {
+        "@tsconfig/node22": "^22.0.0",
+        "@types/bun": "latest",
+      },
     },
     "packages/llm": {
       "name": "@opencode-ai/llm",

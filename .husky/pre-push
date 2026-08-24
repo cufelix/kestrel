@@ -10,8 +10,12 @@ if (!expectedBunVersion) {
   throw new Error("packageManager field not found in root package.json");
 }
 const expectedBunVersionRange = `^${expectedBunVersion}`;
-if (!semver.satisfies(process.versions.bun, expectedBunVersionRange)) {
-  throw new Error(`This script requires bun@${expectedBunVersionRange}, but you are using bun@${process.versions.bun}`);
+// A patch behind the pinned version is not a reason to refuse a push. A
+// *major* mismatch is, because that is where bun changes behaviour.
+const [wantMajor, wantMinor] = expectedBunVersion.split(".");
+const [haveMajor, haveMinor] = process.versions.bun.split(".");
+if (haveMajor !== wantMajor || haveMinor !== wantMinor) {
+  throw new Error(`This script requires bun ${wantMajor}.${wantMinor}.x, but you are using bun@${process.versions.bun}`);
 }
 if (process.versions.bun !== expectedBunVersion) {
   console.warn(`Warning: Bun version ${process.versions.bun} differs from expected ${expectedBunVersion}`);
