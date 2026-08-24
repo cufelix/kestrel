@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Kestrel — an autonomous desktop agent that learns.
+#
+# A thin launcher: everything real happens in the TypeScript. This exists so
+# that `kestrel` is a command, and so that the desktop layer can be found
+# without the user having to know it is a separate program.
+set -euo pipefail
+
+# Resolve through symlinks: this script is linked into ~/.local/bin, and the
+# project it belongs to is not there.
+self="${BASH_SOURCE[0]}"
+while [[ -L "$self" ]]; do
+  link="$(readlink "$self")"
+  [[ "$link" = /* ]] && self="$link" || self="$(dirname "$self")/$link"
+done
+here="$(cd "$(dirname "$self")" && pwd)"
+root="$(dirname "$here")"
+
+# The hands. Overridable, but found automatically in the usual places so that
+# a working install needs no configuration at all.
+if [[ -z "${KESTREL_DESKTOP:-}" ]]; then
+  for candidate in "$HOME/.local/bin/lai" "$root/desktop/bin/lai" "$(command -v lai 2>/dev/null || true)"; do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      export KESTREL_DESKTOP="$candidate"
+      break
+    fi
+  done
+fi
+
+exec bun run --cwd "$root/packages/opencode" --conditions=browser src/index.ts "$@"

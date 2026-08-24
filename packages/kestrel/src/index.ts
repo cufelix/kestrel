@@ -17,8 +17,9 @@ import { desktopTools } from "./desktop"
 import { Notes } from "./brain/notes"
 import { Discipline } from "./brain/discipline"
 import { DESKTOP_PROTOCOL, knowledge } from "./brain/protocol"
+import { startRemotes } from "./remote"
 
-export const Kestrel: Plugin = async () => {
+export const Kestrel: Plugin = async (input) => {
   const notes = new Notes()
   const discipline = new Discipline()
 
@@ -34,6 +35,10 @@ export const Kestrel: Plugin = async () => {
 
   /** The task being worked on, for deciding which notes are worth recalling. */
   let task = ""
+
+  // Reachable from a phone, when a token has been set. An agent that runs your
+  // computer is most useful when you are not sitting at it.
+  const stopRemotes = startRemotes(input.serverUrl, (message) => console.error(`kestrel: ${message}`))
 
   const guarded = Object.fromEntries(
     Object.entries(hands).map(([name, definition]) => [
@@ -59,6 +64,10 @@ export const Kestrel: Plugin = async () => {
   )
 
   return {
+    async dispose() {
+      stopRemotes()
+    },
+
     tool: {
       ...guarded,
 

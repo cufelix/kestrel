@@ -45,16 +45,37 @@ const HIDDEN_REASON: Record<string, string> = {
 
 let bridge: McpBridge | undefined
 
+/**
+ * How to start the desktop layer.
+ *
+ * `KESTREL_DESKTOP` may be a bare program, in which case the standard
+ * arguments are added, or a whole command line, in which case it is taken as
+ * given — which is how a different desktop server, or a fake one, is pointed at.
+ */
+export function desktopCommand(): { command: string; args: string[] } {
+  const configured = (process.env.KESTREL_DESKTOP || "lai").trim()
+  const words = configured.split(/\s+/).filter(Boolean)
+  const command = words[0] || "lai"
+  if (words.length > 1) return { command, args: words.slice(1) }
+  return { command, args: ["mcp", "--no-mcp", ...screenArgs()] }
+}
+
 export function desktop(): McpBridge {
   if (!bridge) {
-    const command = process.env.KESTREL_DESKTOP || "lai"
-    bridge = new McpBridge(command, ["mcp", "--no-mcp", ...screenArgs()], {
+    const { command, args } = desktopCommand()
+    bridge = new McpBridge(command, args, {
       // An MCP client cannot answer an interactive approval prompt, so the
       // desktop layer must not ask for one.
       LAI_MODE: process.env.KESTREL_MODE || "auto",
     })
   }
   return bridge
+}
+
+/** For tests, which need a fresh bridge per command. */
+export function resetDesktop() {
+  bridge?.stop()
+  bridge = undefined
 }
 
 function screenArgs(): string[] {

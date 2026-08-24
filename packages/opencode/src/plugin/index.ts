@@ -20,6 +20,7 @@ import { CloudflareAIGatewayAuthPlugin, CloudflareWorkersAuthPlugin } from "./cl
 import { AzureAuthPlugin } from "./azure"
 import { DigitalOceanAuthPlugin } from "./digitalocean"
 import { XaiAuthPlugin } from "./xai"
+import { Kestrel } from "@kestrel/agent"
 import { CerebrasPlugin } from "./cerebras"
 import { SnowflakeCortexAuthPlugin } from "./snowflake-cortex"
 import { Effect, Layer, Context } from "effect"
@@ -82,6 +83,10 @@ function internalPlugins(flags: RuntimeFlags.Info): PluginInstance[] {
     SnowflakeCortexAuthPlugin,
     XaiAuthPlugin,
     CerebrasPlugin,
+    // Kestrel's own: the hands, the memory and the desktop discipline. First
+    // party rather than configured, because a fork whose defining feature has
+    // to be switched on in a config file has not shipped it.
+    Kestrel,
   ]
 }
 
