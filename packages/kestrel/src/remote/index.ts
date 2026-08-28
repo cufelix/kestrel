@@ -10,7 +10,7 @@ import { Telegram, allowList } from "./telegram"
 
 export type Runner = (task: string) => Promise<string>
 
-export function remoteRunner(serverUrl: URL): Runner {
+export function remoteRunner(serverUrl: URL, onSession?: (id: string) => void): Runner {
   return async (task: string) => {
     const created = await fetch(new URL("/session", serverUrl), {
       method: "POST",
@@ -20,6 +20,7 @@ export function remoteRunner(serverUrl: URL): Runner {
     if (!created.ok) throw new Error(`could not start a session: HTTP ${created.status}`)
     const session = (await created.json()) as { id?: string }
     if (!session.id) throw new Error("the server did not return a session")
+    onSession?.(session.id)
 
     const answered = await fetch(new URL(`/session/${session.id}/message`, serverUrl), {
       method: "POST",

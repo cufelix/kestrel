@@ -17,7 +17,8 @@ import { desktopTools } from "./desktop"
 import { Notes } from "./brain/notes"
 import { Discipline } from "./brain/discipline"
 import { DESKTOP_PROTOCOL, knowledge } from "./brain/protocol"
-import { startRemotes } from "./remote"
+import { Reflector } from "./brain/reflect"
+import { remoteRunner, startRemotes } from "./remote"
 
 export const Kestrel: Plugin = async (input) => {
   const notes = new Notes()
@@ -35,6 +36,21 @@ export const Kestrel: Plugin = async (input) => {
 
   /** The task being worked on, for deciding which notes are worth recalling. */
   let task = ""
+  /** What this run has actually touched, for deciding whether it taught anything. */
+  let used: string[] = []
+
+  // Learning without being asked. A `remember` tool the model may call is a
+  // memory it has to remember to use, which it does when prompted and forgets
+  // when it is busy finishing the task.
+  // A reflection runs as a session like any other, which means it is handed
+  // the same hands. Asked what it learned, an agent holding a mouse is capable
+  // of going and checking. These are the sessions that must only think.
+  const thinkingOnly = new Set<string>()
+  const reflector = new Reflector({
+    notes,
+    ask: (prompt) => remoteRunner(input.serverUrl, (id) => thinkingOnly.add(id))(prompt),
+  })
+  let reflecting = false
 
   // Reachable from a phone, when a token has been set. An agent that runs your
   // computer is most useful when you are not sitting at it.
@@ -47,6 +63,13 @@ export const Kestrel: Plugin = async (input) => {
         description: definition.description,
         args: definition.args,
         async execute(args, context) {
+          if (thinkingOnly.has(context.sessionID)) {
+            return (
+              `Refused: ${name} is not available here. This is a reflection — you are ` +
+              `being asked what an earlier task taught about this machine, not to go ` +
+              `and find out. Answer from what you were told.`
+            )
+          }
           const verdict = discipline.before(name, args as Record<string, unknown>)
           if (!verdict.allow) return verdict.reason
           try {
@@ -113,6 +136,47 @@ export const Kestrel: Plugin = async (input) => {
           return found.map((note) => `## ${note.topic}\n${note.body}`).join("\n\n")
         },
       }),
+    },
+
+    async event({ event }) {
+      // Set KESTREL_TRACE=1 to see which events actually arrive. "the hook was
+      // never called" and "the hook did nothing" look identical from outside.
+      if (process.env.KESTREL_TRACE) {
+        console.error(`kestrel-trace: event ${(event as any)?.type} (used=${used.length})`)
+      }
+      // The end of a task is the moment to notice what it taught. Once, and
+      // never while another reflection is in flight — a reflection is itself a
+      // session, and its own idle event would start another.
+      if ((event as any)?.type !== "session.idle") return
+      if (reflecting || !used.length) return
+      reflecting = true
+      const about = task
+      const withTools = used
+      used = []
+
+      // Not awaited. A one-shot `kestrel run` would otherwise sit there after
+      // the answer is already on screen, waiting for a lesson nobody asked
+      // for. In a server or the terminal interface the reflection finishes on
+      // its own; in a one-shot run it may be cut off when the process exits,
+      // and that is the right way round — the task is what was being waited on.
+      void (async () => {
+        try {
+          const learned = await reflector.reflect(about, withTools)
+          if (learned.length) console.error(`kestrel: learned about ${learned.join(", ")}`)
+        } catch {
+          /* losing a lesson must never fail the run it came from */
+        } finally {
+          reflecting = false
+          // Bounded: a long-lived server would otherwise accumulate one id per
+          // task for as long as it runs.
+          if (thinkingOnly.size > 50) thinkingOnly.clear()
+        }
+      })()
+    },
+
+    async "tool.execute.after"({ tool }) {
+      used.push(tool)
+      if (process.env.KESTREL_TRACE) console.error(`kestrel-trace: after ${tool} (used=${used.length})`)
     },
 
     async "chat.message"(_input, output) {
