@@ -70,6 +70,12 @@ pipx install 'lai[tui,mcp] @ git+https://github.com/cufelix/lai.git'
 Kestrel finds it automatically. Without it, Kestrel still runs — it simply says
 it has no hands when you ask it to do something on screen.
 
+Because the hands are shared rather than reimplemented, an improvement there
+arrives here without a line of code. Measured after one such fix: VS Code went
+from **1** accessible element to **69**, because Chromium exposes nothing at
+all to AT-SPI without `--force-renderer-accessibility` and nothing had ever
+passed it.
+
 ---
 
 ## Use
