@@ -110,3 +110,18 @@ describe("surviving a run that was too quick", () => {
     expect(found?.task).toBe("second")
   })
 })
+
+describe("not spending an attempt on something impossible", () => {
+  test("an unreachable server leaves the record untouched", async () => {
+    // In a one-shot run the plugin is handed a server URL nothing listens on.
+    // Three quick runs in a row would otherwise use up every attempt and drop
+    // the lesson without ever having asked the model anything.
+    const pending = await scratch()
+    await pending.record("open the editor", ["app_open"])
+    const before = await fs.readFile(path.join(pending.directory, "pending.json"), "utf8")
+    // no take() at all — this is what the plugin does when nothing answers
+    const after = await fs.readFile(path.join(pending.directory, "pending.json"), "utf8")
+    expect(after).toBe(before)
+    expect(JSON.parse(after).attempts).toBe(0)
+  })
+})

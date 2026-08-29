@@ -54,23 +54,30 @@ export const Kestrel: Plugin = async (input) => {
   let reflecting = false
   const pending = new Pending()
 
-  // Reflect on the *previous* run, now, while this one is starting. A one-shot
-  // `kestrel run` exits as soon as its answer is on screen — rightly; nobody
-  // should wait for a lesson — which used to mean the lesson was lost every
-  // time, and one-shot runs are how most people use a command.
-  void (async () => {
+  // The previous run's lesson, picked up on the first quiet moment rather
+  // than at startup: the plugin is initialised before the server it needs is
+  // listening, so a check here would always find nothing.
+  let backlogDone = false
+  const catchUp = async () => {
+    if (backlogDone) return
+    backlogDone = true
+    if (!(await reachable(input.serverUrl))) {
+      // Nothing to ask. Leave the record untouched — spending one of its few
+      // attempts on a reflection that cannot happen would discard the lesson
+      // after three quick runs without ever having asked anything.
+      backlogDone = false
+      return
+    }
     const waiting = await pending.take()
     if (!waiting) return
     try {
       const learned = await reflector.reflect(waiting.task, waiting.tools)
-      // Cleared only once the reflection has actually finished. A run that
-      // exits first leaves it for the next one rather than eating it.
       await pending.done()
       if (learned.length) console.error(`kestrel: learned about ${learned.join(", ")}`)
     } catch {
       /* a lesson is never worth failing a run over */
     }
-  })()
+  }
 
   // Reachable from a phone, when a token has been set. An agent that runs your
   // computer is most useful when you are not sitting at it.
@@ -168,6 +175,7 @@ export const Kestrel: Plugin = async (input) => {
       // never while another reflection is in flight — a reflection is itself a
       // session, and its own idle event would start another.
       if ((event as any)?.type !== "session.idle") return
+      void catchUp()
       if (reflecting || !used.length) return
       reflecting = true
       const about = task
@@ -237,6 +245,19 @@ export const Kestrel: Plugin = async (input) => {
       const learned = knowledge(recalled)
       if (learned) output.system.push(learned)
     },
+  }
+}
+
+/** Whether the model can be asked anything through this server at all. */
+async function reachable(serverUrl: URL): Promise<boolean> {
+  try {
+    const response = await fetch(new URL("/api/health", serverUrl), {
+      method: "GET",
+      signal: AbortSignal.timeout(2000),
+    })
+    return response.ok
+  } catch {
+    return false
   }
 }
 

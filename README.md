@@ -123,10 +123,11 @@ next run to think about.
 
 *Where it works today, measured rather than assumed:* `kestrel serve` and the
 terminal interface — verified writing *"On this machine, opening 'Text Editor'
-launches Xed"* with nobody asking it to. In a one-shot `kestrel run` the
-reflection cannot yet reach the model (`Unable to connect` — the in-process
-server is not addressable from the plugin at that point), so the lesson waits
-in the pending file until a session that can picks it up.
+launches Xed"* with nobody asking it to. A one-shot `kestrel run` cannot reflect
+at all: the plugin is handed a server URL (`localhost:4096`) that nothing is
+listening on there. So a one-shot run writes down what it did without spending
+one of the record's few attempts, and the next session that *can* reach a model
+picks the backlog up — verified end to end.
 
 Notes are newest-first and capped at twelve lines. Two bullets can be worded
 quite differently and mean opposite things, and judging which is true needs
