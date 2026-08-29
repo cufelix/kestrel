@@ -31,6 +31,10 @@ const COMMON = new Set([
   "some", "them", "they", "there", "about", "which", "would", "could", "should",
 ])
 
+/** Bullets kept in one note, newest first. */
+export const MAX_LESSONS = 12
+
+
 export class Notes {
   constructor(readonly directory: string = defaultDirectory()) {}
 
@@ -76,8 +80,17 @@ export class Notes {
     }
     if (says(existing, line)) return { topic: slug, added: false }
 
-    const body = existing.trimEnd() + `\n- ${line}\n`
-    await write(file, body)
+    // Newest first, and bounded. Two bullets can be worded quite differently
+    // and mean opposite things; judging which is true needs semantics that
+    // would be wrong more often than right, while "believe the most recent
+    // look at a desktop that changes" is a rule that can be relied on. And a
+    // note grown to forty lines is one nobody reads, which means nobody
+    // notices the line in it that stopped being true.
+    const lines = existing.split("\n")
+    const heading = lines.filter((entry) => !entry.trim().startsWith("-") && entry.trim())
+    const bullets = lines.filter((entry) => entry.trim().startsWith("-"))
+    const kept = [`- ${line}`, ...bullets].slice(0, MAX_LESSONS)
+    await write(file, [...heading, "", ...kept, ""].join("\n"))
     return { topic: slug, added: true }
   }
 
@@ -152,9 +165,30 @@ function tidy(fact: string): string {
  */
 const SAME_ENOUGH = 0.6
 
+/**
+ * The longest a sentence can be and still be judged a rewording.
+ *
+ * "The text editor is Xed" and "the text editor here is xed" are the same
+ * fact worded twice. "The toolbar widget has its own accessible name" and
+ * "The sidebar widget has its own accessible name" are two facts that happen
+ * to share a sentence shape, and swallowing the second loses information the
+ * first cannot replace.
+ *
+ * Overlap alone cannot separate those — 0.75 against 0.86 — so length does the
+ * rest of the work. A short sentence that mostly matches is almost always a
+ * restatement; a long specific one that differs at all is almost always not.
+ * The bias is deliberate: storing a near-duplicate costs a line, and dropping
+ * a real fact costs the thing this file exists for.
+ */
+const SHORT_ENOUGH_TO_BE_A_REWORDING = 5
+
 function says(body: string, line: string): boolean {
   const wanted = significant(line)
   if (wanted.size < 2) return body.toLowerCase().includes(line.toLowerCase())
+  if (wanted.size > SHORT_ENOUGH_TO_BE_A_REWORDING) {
+    // Long and specific: only an outright repeat counts.
+    return body.toLowerCase().includes(line.toLowerCase())
+  }
   for (const existing of body.split("\n")) {
     if (!existing.trim().startsWith("-")) continue
     const have = significant(existing)

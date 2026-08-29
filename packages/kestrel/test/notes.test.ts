@@ -122,3 +122,34 @@ describe("keywords", () => {
     expect(keywords("do it now")).toEqual(new Set())
   })
 })
+
+describe("when two facts disagree", () => {
+  test("the newer one is read first", async () => {
+    // Judging which of two bullets is true needs semantics that would be wrong
+    // more often than right. The most recent look at a desktop that changes is
+    // a rule that can be stated and relied on.
+    const notes = await scratch()
+    await notes.remember("editor", "No window ever appears when opening the editor")
+    await notes.remember("editor", "The editor opens and saves without trouble")
+
+    const bullets = (await notes.list())[0].body.split("\n").filter((l) => l.startsWith("-"))
+    expect(bullets[0]).toContain("opens and saves")
+  })
+
+  test("a note does not grow past what anybody reads", async () => {
+    const { MAX_LESSONS } = await import("../src/brain/notes")
+    const subjects = [
+      "toolbar", "sidebar", "statusbar", "menubar", "gutter", "minimap",
+      "breadcrumb", "terminal", "explorer", "palette", "tabstrip", "ruler",
+      "outline", "problems", "timeline", "search", "debugger",
+    ]
+    const notes = await scratch()
+    for (const subject of subjects) {
+      await notes.remember("editor", `The ${subject} widget is exposed with its own accessible name`)
+    }
+    const bullets = (await notes.list())[0].body.split("\n").filter((l) => l.startsWith("-"))
+    expect(bullets).toHaveLength(MAX_LESSONS)
+    expect(bullets[0]).toContain(subjects[subjects.length - 1])
+    expect(bullets.join(" ")).not.toContain(subjects[0])
+  })
+})
