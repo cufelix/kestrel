@@ -105,6 +105,34 @@ file per topic. Not a vector store: the corpus is a few dozen short notes about
 one computer, and a person has to be able to open the thing and cross out what
 is wrong.
 
+**It notices on its own.** A `remember` tool the model *may* call is not a
+memory — it is a memory the model has to remember to use, which it does when
+prompted and forgets when it is busy finishing the actual task. So when a task
+that touched the desktop ends, Kestrel asks itself one question: what did this
+teach about this machine that a later task would be faster for knowing? Almost
+always nothing, and answering nothing is the common case and is cheap.
+
+The filter after it matters as much. Asked what it learned, a model will
+happily report the answer to the question it was just given — "45 + 78 = 123" —
+which is arithmetic, will never be true of anything else, and costs context
+every time it is recalled. Events, results and sums are discarded.
+
+Nothing waits on it: the answer is on screen before the reflection starts, and
+a run that ends first leaves what it did in `~/.kestrel/pending.json` for the
+next run to think about.
+
+*Where it works today, measured rather than assumed:* `kestrel serve` and the
+terminal interface — verified writing *"On this machine, opening 'Text Editor'
+launches Xed"* with nobody asking it to. In a one-shot `kestrel run` the
+reflection cannot yet reach the model (`Unable to connect` — the in-process
+server is not addressable from the plugin at that point), so the lesson waits
+in the pending file until a session that can picks it up.
+
+Notes are newest-first and capped at twelve lines. Two bullets can be worded
+quite differently and mean opposite things, and judging which is true needs
+semantics that would be wrong more often than right; believing the most recent
+look at a screen that changes is a rule that can be relied on.
+
 ```
 ~/.kestrel/notes/calculator.md
   # calculator
