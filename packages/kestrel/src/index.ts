@@ -17,6 +17,7 @@ import { desktopTools } from "./desktop"
 import { Notes } from "./brain/notes"
 import { Discipline } from "./brain/discipline"
 import { DESKTOP_PROTOCOL, knowledge } from "./brain/protocol"
+import { Pending } from "./brain/pending"
 import { Reflector } from "./brain/reflect"
 import { remoteRunner, startRemotes } from "./remote"
 
@@ -51,6 +52,25 @@ export const Kestrel: Plugin = async (input) => {
     ask: (prompt) => remoteRunner(input.serverUrl, (id) => thinkingOnly.add(id))(prompt),
   })
   let reflecting = false
+  const pending = new Pending()
+
+  // Reflect on the *previous* run, now, while this one is starting. A one-shot
+  // `kestrel run` exits as soon as its answer is on screen — rightly; nobody
+  // should wait for a lesson — which used to mean the lesson was lost every
+  // time, and one-shot runs are how most people use a command.
+  void (async () => {
+    const waiting = await pending.take()
+    if (!waiting) return
+    try {
+      const learned = await reflector.reflect(waiting.task, waiting.tools)
+      // Cleared only once the reflection has actually finished. A run that
+      // exits first leaves it for the next one rather than eating it.
+      await pending.done()
+      if (learned.length) console.error(`kestrel: learned about ${learned.join(", ")}`)
+    } catch {
+      /* a lesson is never worth failing a run over */
+    }
+  })()
 
   // Reachable from a phone, when a token has been set. An agent that runs your
   // computer is most useful when you are not sitting at it.
@@ -153,6 +173,9 @@ export const Kestrel: Plugin = async (input) => {
       const about = task
       const withTools = used
       used = []
+      // Written first, so a process that exits before the reflection finishes
+      // hands the lesson to the next run instead of dropping it.
+      void pending.record(about, withTools)
 
       // Not awaited. A one-shot `kestrel run` would otherwise sit there after
       // the answer is already on screen, waiting for a lesson nobody asked
